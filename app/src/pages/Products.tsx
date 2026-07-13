@@ -1,17 +1,27 @@
-import { useState, useEffect } from "react";
-import { useSearchParams, Link, useParams } from "react-router";
+import { useState, useEffect, useRef } from "react";
+import { useSearchParams, Link, useParams, useNavigate } from "react-router";
 import { motion } from "framer-motion";
-import { Filter, SlidersHorizontal, Search, X, ChevronDown, ArrowUpDown, Grid3X3, List } from "lucide-react";
+import { Filter, SlidersHorizontal, Search, X, Grid3X3, List, ShoppingCart, Eye, Check } from "lucide-react";
 import { trpc } from "@/providers/trpc";
 import type { Product } from "@/types";
 import { VEHICLE_BRANDS, YEARS } from "@/types";
+import { useCart } from "@/contexts/CartContext";
 
-function ProductCard({ product, view }: { product: Product; view: "grid" | "list" }) {
+function ProductCard({ product, view, onQuickView }: { product: Product; view: "grid" | "list"; onQuickView: (p: Product) => void }) {
+  const { addToCart } = useCart();
+  const [added, setAdded] = useState(false);
   const qualityColor = {
     genuine: "bg-green-500/20 text-green-400 border-green-500/30",
     oem: "bg-blue-500/20 text-blue-400 border-blue-500/30",
     aftermarket: "bg-orange-500/20 text-orange-400 border-orange-500/30",
   }[product.qualityType];
+
+  const handleAddToCart = (e: React.MouseEvent) => {
+    e.preventDefault();
+    addToCart(product, 1);
+    setAdded(true);
+    setTimeout(() => setAdded(false), 1500);
+  };
 
   if (view === "list") {
     return (
@@ -26,9 +36,22 @@ function ProductCard({ product, view }: { product: Product; view: "grid" | "list
           </div>
           <h3 className="text-base font-medium text-white mb-1 group-hover:text-blue-400 transition-colors">{product.name}</h3>
           <p className="text-xs text-gray-500 mb-2 line-clamp-2">{product.description}</p>
-          <div className="flex items-center gap-3">
-            <span className="text-lg font-bold text-white">PKR {Number(product.sellingPrice).toLocaleString()}</span>
-            {product.marketPriceMax && <span className="text-xs text-gray-500 line-through">PKR {Number(product.marketPriceMax).toLocaleString()}</span>}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span className="text-lg font-bold text-white">PKR {Number(product.sellingPrice).toLocaleString()}</span>
+              {product.marketPriceMax && <span className="text-xs text-gray-500 line-through">PKR {Number(product.marketPriceMax).toLocaleString()}</span>}
+              {product.stockStatus === "out_of_stock" && (
+                <span className="px-2 py-0.5 rounded-full text-[9px] font-semibold bg-red-500/20 text-red-400 border border-red-500/30">Out of Stock</span>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <button onClick={(e) => { e.preventDefault(); onQuickView(product); }} className="p-2 bg-white/5 hover:bg-white/10 rounded-lg text-gray-300 transition-colors">
+                <Eye className="w-4 h-4" />
+              </button>
+              <button onClick={handleAddToCart} disabled={product.stockQuantity === 0} className="p-2 bg-orange-500 hover:bg-orange-600 disabled:opacity-40 rounded-lg text-white transition-colors">
+                {added ? <Check className="w-4 h-4" /> : <ShoppingCart className="w-4 h-4" />}
+              </button>
+            </div>
           </div>
         </div>
       </Link>
@@ -47,6 +70,19 @@ function ProductCard({ product, view }: { product: Product; view: "grid" | "list
             <span className="px-2.5 py-1 rounded-full text-[10px] font-semibold bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">Low Stock</span>
           </div>
         )}
+        {product.stockStatus === "out_of_stock" && (
+          <div className="absolute top-3 right-3">
+            <span className="px-2.5 py-1 rounded-full text-[10px] font-semibold bg-red-500/20 text-red-400 border border-red-500/30">Out of Stock</span>
+          </div>
+        )}
+        <div className="absolute inset-x-0 bottom-0 p-2 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity bg-gradient-to-t from-black/70 to-transparent">
+          <button onClick={(e) => { e.preventDefault(); onQuickView(product); }} className="flex-1 py-1.5 bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-lg text-white text-xs flex items-center justify-center gap-1 transition-colors">
+            <Eye className="w-3.5 h-3.5" /> Quick View
+          </button>
+          <button onClick={handleAddToCart} disabled={product.stockQuantity === 0} className="p-1.5 bg-orange-500 hover:bg-orange-600 disabled:opacity-40 rounded-lg text-white transition-colors">
+            {added ? <Check className="w-3.5 h-3.5" /> : <ShoppingCart className="w-3.5 h-3.5" />}
+          </button>
+        </div>
       </div>
       <div className="p-4">
         <p className="text-[10px] uppercase tracking-wider text-gray-500 mb-1">{product.carBrand} {product.carModel}</p>
@@ -60,12 +96,62 @@ function ProductCard({ product, view }: { product: Product; view: "grid" | "list
   );
 }
 
+function QuickViewModal({ product, onClose }: { product: Product; onClose: () => void }) {
+  const { addToCart } = useCart();
+  const navigate = useNavigate();
+  const [added, setAdded] = useState(false);
+
+  return (
+    <div className="fixed inset-0 z-[60] bg-black/70 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-[#111] border border-white/10 rounded-2xl w-full max-w-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-white/5">
+          <h3 className="font-semibold text-white">Quick View</h3>
+          <button onClick={onClose} className="p-1.5 hover:bg-white/5 rounded-lg text-gray-400 hover:text-white">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-5">
+          <div className="aspect-square rounded-xl overflow-hidden bg-[#0d0d0d]">
+            <img src={product.image || "/images/products/engine/oil-filter-generic.jpg"} alt={product.name} className="w-full h-full object-cover" />
+          </div>
+          <div>
+            <p className="text-xs uppercase tracking-wider text-gray-500 mb-1">{product.carBrand} {product.carModel}</p>
+            <h2 className="text-lg font-semibold text-white mb-2">{product.name}</h2>
+            <div className="flex items-end gap-2 mb-3">
+              <span className="text-xl font-bold text-white">PKR {Number(product.sellingPrice).toLocaleString()}</span>
+              {product.marketPriceMax && <span className="text-sm text-gray-500 line-through mb-0.5">PKR {Number(product.marketPriceMax).toLocaleString()}</span>}
+            </div>
+            <p className="text-sm text-gray-400 mb-4 line-clamp-4">{product.description}</p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => { addToCart(product, 1); setAdded(true); setTimeout(() => setAdded(false), 1500); }}
+                disabled={product.stockQuantity === 0}
+                className="flex-1 py-2.5 bg-orange-500 hover:bg-orange-600 disabled:opacity-40 rounded-xl text-white text-sm font-medium transition-colors flex items-center justify-center gap-2"
+              >
+                {added ? <Check className="w-4 h-4" /> : <ShoppingCart className="w-4 h-4" />} {added ? "Added" : "Add to Cart"}
+              </button>
+              <button
+                onClick={() => navigate(`/product/${product.slug}`)}
+                className="px-4 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-white text-sm font-medium transition-colors"
+              >
+                View Details
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Products() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { slug } = useParams();
   const [view, setView] = useState<"grid" | "list">("grid");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [page, setPage] = useState(1);
+  const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null);
+  const resultsRef = useRef<HTMLDivElement>(null);
 
   // Filter states
   const [search, setSearch] = useState(searchParams.get("search") || "");
@@ -74,6 +160,8 @@ export default function Products() {
   const [year, setYear] = useState(searchParams.get("year") || "");
   const [qualityType, setQualityType] = useState(searchParams.get("quality") || "");
   const [sortBy, setSortBy] = useState<"name" | "price_asc" | "price_desc" | "newest">("newest");
+
+  const showBrandPicker = searchParams.get("view") === "brands" && !brand;
 
   const { data: categoriesData } = trpc.category.list.useQuery();
   const { data: productsData, isLoading } = trpc.product.list.useQuery({
@@ -93,6 +181,19 @@ export default function Products() {
 
   const applyFilters = () => {
     setPage(1);
+    resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  const applySidebarFilters = () => {
+    setPage(1);
+    setFiltersOpen(false);
+    resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  const selectBrand = (name: string) => {
+    setBrand(name);
+    searchParams.delete("view");
+    setSearchParams(searchParams);
   };
 
   const clearFilters = () => {
@@ -214,14 +315,32 @@ export default function Products() {
                 </div>
               )}
 
-              <button onClick={applyFilters} className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm font-medium transition-colors">
+              <button onClick={applySidebarFilters} className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm font-medium transition-colors">
                 Apply Filters
               </button>
             </div>
           </div>
 
           {/* Product Grid */}
-          <div className="flex-1">
+          <div className="flex-1" ref={resultsRef}>
+            {showBrandPicker && (
+              <div className="mb-8">
+                <h2 className="text-lg font-semibold text-white mb-4">Shop by Brand</h2>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                  {VEHICLE_BRANDS.map((b) => (
+                    <button
+                      key={b.name}
+                      onClick={() => selectBrand(b.name)}
+                      className="p-4 bg-[#111] border border-white/5 hover:border-blue-500/30 rounded-xl text-center transition-colors"
+                    >
+                      <p className="text-white font-medium">{b.name}</p>
+                      <p className="text-xs text-gray-500 mt-1">{b.models.length} models</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Toolbar */}
             <div className="flex items-center justify-between mb-4">
               <p className="text-sm text-gray-400">
@@ -265,7 +384,7 @@ export default function Products() {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: i * 0.03 }}
                   >
-                    <ProductCard product={product as Product} view={view} />
+                    <ProductCard product={product as Product} view={view} onQuickView={setQuickViewProduct} />
                   </motion.div>
                 ))}
               </div>
@@ -286,6 +405,10 @@ export default function Products() {
           </div>
         </div>
       </div>
+
+      {quickViewProduct && (
+        <QuickViewModal product={quickViewProduct} onClose={() => setQuickViewProduct(null)} />
+      )}
     </div>
   );
 }

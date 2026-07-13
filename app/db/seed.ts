@@ -220,13 +220,15 @@ async function seed() {
   // ==================== DEFAULT SETTINGS ====================
   console.log("Inserting default settings...");
   const defaultSettings = [
-    { key: "shopName", value: "Auto Parts Shop" },
-    { key: "shopAddress", value: "Main Auto Market, Karachi, Pakistan" },
-    { key: "shopPhone", value: "03XX-XXXXXXX" },
-    { key: "shopWhatsapp", value: "03XX-XXXXXXX" },
+    { key: "shopName", value: "Malik Farrukh Autos" },
+    { key: "logo", value: "" },
+    { key: "heroImage", value: "" },
+    { key: "shopAddress", value: "Glass Factory Road, Street No. 32, Rawalpindi" },
+    { key: "shopPhone", value: "03005582635" },
+    { key: "shopWhatsapp", value: "03145582562" },
     { key: "shopEmail", value: "info@autopartsshop.pk" },
     { key: "googleMapsUrl", value: "https://maps.google.com" },
-    { key: "openingHours", value: "Mon-Sat: 9:00 AM - 8:00 PM, Sun: Closed" },
+    { key: "openingHours", value: "Sat-Thu: 10:00 AM - 9:00 PM, Fri: Closed" },
     { key: "easypaisaNumber", value: "03XX-XXXXXXX" },
     { key: "jazzcashNumber", value: "03XX-XXXXXXX" },
     { key: "bankName", value: "Your Bank Name" },

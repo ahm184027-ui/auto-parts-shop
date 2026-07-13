@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { eq } from "drizzle-orm";
-import { createRouter, publicQuery } from "./middleware";
+import { createRouter, publicQuery, adminProcedure } from "./middleware";
 import { getDb } from "./queries/connection";
 import { websiteSettings, feedback, aiChatLogs } from "@db/schema";
 
@@ -30,7 +30,7 @@ export const settingsRouter = createRouter({
     }),
 
   // Set setting (admin)
-  set: publicQuery
+  set: adminProcedure
     .input(z.object({ key: z.string(), value: z.string() }))
     .mutation(async ({ input }) => {
       const db = getDb();
@@ -56,7 +56,7 @@ export const settingsRouter = createRouter({
     }),
 
   // Bulk set settings (admin)
-  setBulk: publicQuery
+  setBulk: adminProcedure
     .input(z.record(z.string(), z.string()))
     .mutation(async ({ input }) => {
       const db = getDb();

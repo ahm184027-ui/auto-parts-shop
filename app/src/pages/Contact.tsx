@@ -2,11 +2,21 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import { MapPin, Phone, Mail, Clock, Send, MessageCircle, Star } from "lucide-react";
 import { trpc } from "@/providers/trpc";
+import { whatsAppLink } from "@/lib/utils";
 
 export default function Contact() {
   const [formData, setFormData] = useState({ name: "", email: "", phone: "", rating: 5, message: "" });
   const [submitted, setSubmitted] = useState(false);
   const submitFeedback = trpc.settings.submitFeedback.useMutation();
+  const { data: settings } = trpc.settings.getAll.useQuery();
+
+  const shopAddress = settings?.shopAddress || "Main Auto Market, Karachi, Pakistan";
+  const mapEmbedUrl = settings?.googleMapsUrl?.includes("output=embed")
+    ? settings.googleMapsUrl
+    : `https://www.google.com/maps?q=${encodeURIComponent(shopAddress)}&output=embed`;
+  const directionsUrl = settings?.googleMapsUrl && settings.googleMapsUrl !== "https://maps.google.com"
+    ? settings.googleMapsUrl
+    : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(shopAddress)}`;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -40,7 +50,7 @@ export default function Contact() {
                 </div>
                 <div>
                   <h3 className="font-medium text-white mb-1">Shop Address</h3>
-                  <p className="text-sm text-gray-400">Main Auto Market, Karachi, Pakistan</p>
+                  <p className="text-sm text-gray-400">{shopAddress}</p>
                 </div>
               </div>
             </div>
@@ -52,8 +62,13 @@ export default function Contact() {
                 </div>
                 <div>
                   <h3 className="font-medium text-white mb-1">Phone / WhatsApp</h3>
-                  <p className="text-sm text-gray-400">03XX-XXXXXXX</p>
-                  <a href="https://wa.me/03XXXXXXXXX" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-sm text-green-400 mt-2 hover:underline">
+                  <a href={`tel:${settings?.shopPhone || ""}`} className="text-sm text-gray-400 hover:text-blue-400 transition-colors">{settings?.shopPhone || "03XX-XXXXXXX"}</a>
+                  <a
+                    href={whatsAppLink(settings?.shopWhatsapp, "Hi, I'd like to ask about a spare part.")}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1 text-sm text-green-400 mt-2 hover:underline w-fit"
+                  >
                     <MessageCircle className="w-3 h-3" /> Chat on WhatsApp
                   </a>
                 </div>
@@ -67,7 +82,7 @@ export default function Contact() {
                 </div>
                 <div>
                   <h3 className="font-medium text-white mb-1">Email</h3>
-                  <p className="text-sm text-gray-400">info@autopartsshop.pk</p>
+                  <a href={`mailto:${settings?.shopEmail || ""}`} className="text-sm text-gray-400 hover:text-blue-400 transition-colors">{settings?.shopEmail || "info@autopartsshop.pk"}</a>
                 </div>
               </div>
             </div>
@@ -79,19 +94,28 @@ export default function Contact() {
                 </div>
                 <div>
                   <h3 className="font-medium text-white mb-1">Opening Hours</h3>
-                  <p className="text-sm text-gray-400">Mon - Sat: 9:00 AM - 8:00 PM</p>
-                  <p className="text-sm text-gray-400">Sunday: Closed</p>
+                  <p className="text-sm text-gray-400 whitespace-pre-line">{settings?.openingHours || "Mon - Sat: 9:00 AM - 8:00 PM"}</p>
                 </div>
               </div>
             </div>
 
-            {/* Map placeholder */}
-            <div className="bg-[#111] rounded-2xl border border-white/5 overflow-hidden h-48 flex items-center justify-center">
-              <div className="text-center">
-                <MapPin className="w-8 h-8 text-gray-600 mx-auto mb-2" />
-                <p className="text-sm text-gray-500">Google Maps</p>
-                <p className="text-xs text-gray-600">Main Auto Market, Karachi</p>
-              </div>
+            {/* Google Maps */}
+            <div className="bg-[#111] rounded-2xl border border-white/5 overflow-hidden">
+              <iframe
+                title="Shop location"
+                src={mapEmbedUrl}
+                className="w-full h-48 border-0"
+                loading="lazy"
+                referrerPolicy="no-referrer-when-downgrade"
+              />
+              <a
+                href={directionsUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-center gap-2 py-3 text-sm text-blue-400 hover:bg-white/5 transition-colors border-t border-white/5"
+              >
+                <MapPin className="w-4 h-4" /> Get Directions
+              </a>
             </div>
           </motion.div>
 

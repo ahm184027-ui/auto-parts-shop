@@ -24,6 +24,7 @@
     --input: 0 0% 15%;
     --ring: 217 91% 60%;
     --radius: 0.75rem;
+    --silver: 210 14% 83%;
   }
 
   html {
@@ -65,5 +66,18 @@
 @layer utilities {
   .text-balance {
     text-wrap: balance;
+  }
+
+  .text-silver-gradient {
+    background: linear-gradient(180deg, #f2f4f7 0%, hsl(var(--silver)) 55%, #9aa4b2 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+}
+
+@layer components {
+  .input {
+    @apply w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500 transition-colors;
   }
 }

@@ -57,7 +57,11 @@ export default function Cart() {
                         <Minus className="w-3 h-3" />
                       </button>
                       <span className="w-8 text-center text-sm">{item.quantity}</span>
-                      <button onClick={() => updateQuantity(item.product.id, item.quantity + 1)} className="p-1.5 hover:bg-white/5 rounded-r-lg transition-colors">
+                      <button
+                        onClick={() => updateQuantity(item.product.id, Math.min(item.product.stockQuantity, item.quantity + 1))}
+                        disabled={item.quantity >= item.product.stockQuantity}
+                        className="p-1.5 hover:bg-white/5 rounded-r-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                      >
                         <Plus className="w-3 h-3" />
                       </button>
                     </div>
@@ -65,6 +69,9 @@ export default function Cart() {
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
+                  {item.quantity >= item.product.stockQuantity && (
+                    <p className="text-[11px] text-yellow-500 mt-1">Only {item.product.stockQuantity} unit(s) in stock</p>
+                  )}
                 </div>
               </motion.div>
             ))}

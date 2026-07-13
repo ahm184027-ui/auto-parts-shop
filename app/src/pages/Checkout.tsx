@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { motion } from "framer-motion";
-import { ArrowLeft, CreditCard, Truck, Store, MapPin, Check, Phone, MessageSquare, Mail, Upload } from "lucide-react";
+import { ArrowLeft, CreditCard, Truck, Store, MapPin, Check, Phone, MessageSquare, Mail, Upload, Loader2, X } from "lucide-react";
+import { toast } from "sonner";
 import { useCart } from "@/contexts/CartContext";
 import { trpc } from "@/providers/trpc";
+import { fileToCompressedDataUrl } from "@/lib/image";
 
 type PaymentMethod = "easypaisa" | "jazzcash" | "bank_transfer" | "cod";
 type DeliveryMethod = "pickup" | "local_delivery" | "courier";
@@ -20,13 +22,28 @@ export default function Checkout() {
     whatsapp: "",
     email: "",
     address: "",
-    city: "Karachi",
+    city: "Rawalpindi",
     notes: "",
   });
   const [deliveryMethod, setDeliveryMethod] = useState<DeliveryMethod>("courier");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cod");
   const [orderNumber, setOrderNumber] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [paymentScreenshot, setPaymentScreenshot] = useState<string | null>(null);
+  const [uploadingScreenshot, setUploadingScreenshot] = useState(false);
+
+  const handleScreenshotUpload = async (file: File | undefined) => {
+    if (!file) return;
+    setUploadingScreenshot(true);
+    try {
+      const dataUrl = await fileToCompressedDataUrl(file, 1200, 0.8);
+      setPaymentScreenshot(dataUrl);
+    } catch {
+      // ignore — user can retry
+    } finally {
+      setUploadingScreenshot(false);
+    }
+  };
 
   const deliveryCharge = deliveryMethod === "pickup" ? 0 : subtotal > 5000 ? 0 : 200;
   const serviceFee = 0;
@@ -82,12 +99,15 @@ export default function Checkout() {
         serviceFee,
         grandTotal,
         notes: formData.notes || undefined,
+        paymentScreenshot: paymentScreenshot || undefined,
       });
       setOrderNumber(result.orderNumber);
       clearCart();
       setStep("success");
     } catch (err) {
       console.error("Order failed:", err);
+      const message = err instanceof Error ? err.message : "Something went wrong while placing your order. Please try again.";
+      toast.error(message);
     }
   };
 
@@ -267,9 +287,29 @@ export default function Checkout() {
                   {paymentMethod !== "cod" && (
                     <div className="mt-4 p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-xl">
                       <p className="text-sm text-yellow-400 mb-2">Please send payment to the account above and upload the screenshot.</p>
-                      <button className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-gray-300 hover:bg-white/10 transition-colors">
-                        <Upload className="w-4 h-4" /> Upload Screenshot
-                      </button>
+                      {paymentScreenshot ? (
+                        <div className="relative inline-block">
+                          <img src={paymentScreenshot} alt="Payment screenshot" className="w-24 h-24 object-cover rounded-lg border border-white/10" />
+                          <button
+                            type="button"
+                            onClick={() => setPaymentScreenshot(null)}
+                            className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center"
+                          >
+                            <X className="w-3 h-3 text-white" />
+                          </button>
+                        </div>
+                      ) : (
+                        <label className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-gray-300 hover:bg-white/10 transition-colors cursor-pointer w-fit">
+                          {uploadingScreenshot ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                          {uploadingScreenshot ? "Processing..." : "Upload Screenshot"}
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(e) => handleScreenshotUpload(e.target.files?.[0])}
+                          />
+                        </label>
+                      )}
                     </div>
                   )}
                 </div>

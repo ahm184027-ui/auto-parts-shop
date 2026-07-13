@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useSearchParams } from "react-router";
 import { motion } from "framer-motion";
 import { Search, Package, Truck, CheckCircle, Clock, XCircle, RotateCcw, MapPin } from "lucide-react";
 import { trpc } from "@/providers/trpc";
@@ -12,9 +13,12 @@ const STATUS_STEPS = [
 ];
 
 export default function OrderTracking() {
-  const [orderNumber, setOrderNumber] = useState("");
-  const [phone, setPhone] = useState("");
-  const [submitted, setSubmitted] = useState(false);
+  const [searchParams] = useSearchParams();
+  const prefilledOrder = searchParams.get("order") || "";
+  const prefilledPhone = searchParams.get("phone") || "";
+  const [orderNumber, setOrderNumber] = useState(prefilledOrder);
+  const [phone, setPhone] = useState(prefilledPhone);
+  const [submitted, setSubmitted] = useState(!!prefilledOrder && !!prefilledPhone);
 
   const { data: order, isLoading } = trpc.order.track.useQuery(
     { orderNumber, phone },

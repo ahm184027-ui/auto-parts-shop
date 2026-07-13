@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router";
 import { ShoppingCart, Menu, X, Search, Phone } from "lucide-react";
 import { useCart } from "@/contexts/CartContext";
+import { trpc } from "@/providers/trpc";
 
 export default function Header() {
   const [scrolled, setScrolled] = useState(false);
@@ -10,6 +11,7 @@ export default function Header() {
   const [searchQuery, setSearchQuery] = useState("");
   const location = useLocation();
   const { totalItems } = useCart();
+  const { data: settings } = trpc.settings.getAll.useQuery();
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 80);
@@ -50,8 +52,10 @@ export default function Header() {
       <div className={`${isTransparent ? "hidden" : "hidden md:block"} border-b border-white/5 bg-[#111]`}>
         <div className="max-w-7xl mx-auto px-4 py-1.5 flex items-center justify-between text-xs text-gray-400">
           <div className="flex items-center gap-4">
-            <span className="flex items-center gap-1"><Phone className="w-3 h-3" /> 03XX-XXXXXXX</span>
-            <span>Mon-Sat: 9AM - 8PM</span>
+            <a href={`tel:${settings?.shopPhone || ""}`} className="flex items-center gap-1 hover:text-blue-400 transition-colors">
+              <Phone className="w-3 h-3" /> {settings?.shopPhone || "03XX-XXXXXXX"}
+            </a>
+            <span>{settings?.openingHours || "Mon-Sat: 9AM - 8PM"}</span>
           </div>
           <div className="flex items-center gap-4">
             <Link to="/track-order" className="hover:text-blue-400 transition-colors">Track Order</Link>
@@ -65,14 +69,20 @@ export default function Header() {
         <div className="flex items-center justify-between h-16 md:h-18">
           {/* Logo */}
           <Link to="/" className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-700 rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-sm">A</span>
-            </div>
+            {settings?.logo ? (
+              <img src={settings.logo} alt={settings?.shopName || "Logo"} className="w-8 h-8 rounded-lg object-cover" />
+            ) : (
+              <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-700 rounded-lg flex items-center justify-center">
+                <span className="text-white font-bold text-sm">A</span>
+              </div>
+            )}
             <div className="flex flex-col">
-              <span className={`font-bold text-lg tracking-tight leading-tight ${isTransparent ? "text-white" : "text-white"}`}>
-                Auto Parts
+              <span className="font-bold text-lg tracking-tight leading-tight text-silver-gradient">
+                {settings?.shopName?.split(" ").slice(0, -1).join(" ") || "Auto Parts"}
               </span>
-              <span className="text-[9px] uppercase tracking-[0.25em] text-gray-500 -mt-0.5">Shop</span>
+              <span className="text-[9px] uppercase tracking-[0.25em] text-gray-500 -mt-0.5">
+                {settings?.shopName?.split(" ").slice(-1).join(" ") || "Shop"}
+              </span>
             </div>
           </Link>
 

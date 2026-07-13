@@ -1,10 +1,12 @@
 import { useState } from "react";
-import { useParams, Link } from "react-router";
+import { useParams, Link, useNavigate } from "react-router";
 import { motion } from "framer-motion";
-import { Minus, Plus, ShoppingCart, Zap, Phone, ArrowLeft, Shield, Truck, RotateCcw, Check, Star, MessageCircle } from "lucide-react";
+import { Minus, Plus, ShoppingCart, Zap, Shield, Truck, RotateCcw, Check, Star, MessageCircle, Bot, X } from "lucide-react";
 import { trpc } from "@/providers/trpc";
 import { useCart } from "@/contexts/CartContext";
 import type { Product } from "@/types";
+import { whatsAppLink } from "@/lib/utils";
+import { openAiAssistant } from "@/lib/chatbot-events";
 
 function ProductCardSmall({ product }: { product: Product }) {
   const qualityColor = {
@@ -29,14 +31,18 @@ function ProductCardSmall({ product }: { product: Product }) {
 
 export default function ProductDetail() {
   const { slug } = useParams<{ slug: string }>();
+  const navigate = useNavigate();
   const { data: product, isLoading } = trpc.product.getBySlug.useQuery({ slug: slug || "" });
   const { data: relatedProducts } = trpc.product.getRelated.useQuery(
     { productId: product?.id || 0, categoryId: product?.categoryId || 0 },
     { enabled: !!product }
   );
+  const { data: settings } = trpc.settings.getAll.useQuery();
   const { addToCart } = useCart();
   const [quantity, setQuantity] = useState(1);
   const [added, setAdded] = useState(false);
+  const [activeImage, setActiveImage] = useState(0);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
 
   if (isLoading) {
     return (
@@ -68,7 +74,22 @@ export default function ProductDetail() {
     setTimeout(() => setAdded(false), 2000);
   };
 
+  const handleBuyNow = () => {
+    addToCart(p, quantity);
+    navigate("/checkout");
+  };
+
   const specs = p.specifications?.split("\n") || [];
+
+  const gallery: string[] = (() => {
+    try {
+      const parsed = p.images ? JSON.parse(p.images) : [];
+      const list = Array.isArray(parsed) ? parsed : [];
+      return list.length > 0 ? list : p.image ? [p.image] : ["/images/products/engine/oil-filter-generic.jpg"];
+    } catch {
+      return p.image ? [p.image] : ["/images/products/engine/oil-filter-generic.jpg"];
+    }
+  })();
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] pt-20">
@@ -83,24 +104,41 @@ export default function ProductDetail() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-12">
-          {/* Image */}
+          {/* Image Gallery */}
           <motion.div
             initial={{ opacity: 0, x: -30 }}
             animate={{ opacity: 1, x: 0 }}
-            className="bg-[#111] rounded-2xl border border-white/5 overflow-hidden"
           >
-            <div className="aspect-square bg-[#0d0d0d] relative">
-              <img
-                src={p.image || "/images/products/engine/oil-filter-generic.jpg"}
-                alt={p.name}
-                className="w-full h-full object-cover"
-              />
-              <div className="absolute top-4 left-4">
-                <span className={`px-3 py-1.5 rounded-full text-xs font-semibold uppercase border ${qualityColor}`}>
-                  {p.qualityType}
-                </span>
-              </div>
+            <div className="bg-[#111] rounded-2xl border border-white/5 overflow-hidden">
+              <button
+                onClick={() => setLightboxOpen(true)}
+                className="aspect-square bg-[#0d0d0d] relative w-full cursor-zoom-in group"
+              >
+                <img
+                  src={gallery[activeImage]}
+                  alt={p.name}
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                />
+                <div className="absolute top-4 left-4">
+                  <span className={`px-3 py-1.5 rounded-full text-xs font-semibold uppercase border ${qualityColor}`}>
+                    {p.qualityType}
+                  </span>
+                </div>
+              </button>
             </div>
+            {gallery.length > 1 && (
+              <div className="flex gap-2 mt-3">
+                {gallery.map((img, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setActiveImage(i)}
+                    className={`w-16 h-16 rounded-lg overflow-hidden border-2 transition-colors ${activeImage === i ? "border-blue-500" : "border-white/10"}`}
+                  >
+                    <img src={img} alt={`${p.name} ${i + 1}`} className="w-full h-full object-cover" />
+                  </button>
+                ))}
+              </div>
+            )}
           </motion.div>
 
           {/* Details */}
@@ -166,16 +204,31 @@ export default function ProductDetail() {
                 </button>
               </div>
 
-              {/* Buy Now / WhatsApp */}
-              <div className="flex gap-3 mt-3">
-                <a
-                  href={`https://wa.me/03XXXXXXXXX?text=I'm interested in ${p.name} (SKU: ${p.sku})`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex-1 py-2.5 bg-green-600/20 border border-green-500/30 text-green-400 rounded-xl font-medium text-sm flex items-center justify-center gap-2 hover:bg-green-600/30 transition-colors"
+              {/* Buy Now / Ask AI / WhatsApp */}
+              <div className="flex flex-col gap-2 mt-3">
+                <button
+                  onClick={handleBuyNow}
+                  disabled={p.stockQuantity <= 0}
+                  className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl font-medium text-sm flex items-center justify-center gap-2 transition-colors"
                 >
-                  <MessageCircle className="w-4 h-4" /> WhatsApp Inquiry
-                </a>
+                  <Zap className="w-4 h-4" /> Buy Now
+                </button>
+                <div className="flex gap-3">
+                  <a
+                    href={whatsAppLink(settings?.shopWhatsapp, `I'm interested in ${p.name} (SKU: ${p.sku})`)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex-1 py-2.5 bg-green-600/20 border border-green-500/30 text-green-400 rounded-xl font-medium text-sm flex items-center justify-center gap-2 hover:bg-green-600/30 transition-colors"
+                  >
+                    <MessageCircle className="w-4 h-4" /> WhatsApp Inquiry
+                  </a>
+                  <button
+                    onClick={openAiAssistant}
+                    className="flex-1 py-2.5 bg-white/5 border border-white/10 text-gray-300 rounded-xl font-medium text-sm flex items-center justify-center gap-2 hover:bg-white/10 transition-colors"
+                  >
+                    <Bot className="w-4 h-4" /> Ask AI Assistant
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -276,6 +329,21 @@ export default function ProductDetail() {
           </div>
         )}
       </div>
+
+      {lightboxOpen && (
+        <div
+          className="fixed inset-0 z-[70] bg-black/90 flex items-center justify-center p-6"
+          onClick={() => setLightboxOpen(false)}
+        >
+          <button
+            onClick={() => setLightboxOpen(false)}
+            className="absolute top-6 right-6 p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
+          <img src={gallery[activeImage]} alt={p.name} className="max-w-full max-h-full rounded-xl object-contain" />
+        </div>
+      )}
     </div>
   );
 }

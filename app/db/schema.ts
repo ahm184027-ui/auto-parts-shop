@@ -11,7 +11,16 @@ import {
   boolean,
   json,
   index,
+  customType,
 } from "drizzle-orm/mysql-core";
+
+// MySQL LONGTEXT column — used for base64-encoded image/screenshot data,
+// which regularly exceeds TEXT's 64KB cap even after client-side compression.
+const longtext = customType<{ data: string }>({
+  dataType() {
+    return "longtext";
+  },
+});
 
 // ==================== USERS ====================
 export const users = mysqlTable("users", {
@@ -35,7 +44,7 @@ export const categories = mysqlTable("categories", {
   slug: varchar("slug", { length: 64 }).notNull().unique(),
   name: varchar("name", { length: 128 }).notNull(),
   description: text("description"),
-  image: varchar("image", { length: 512 }),
+  image: longtext("image"),
   sortOrder: int("sortOrder").default(0).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
@@ -59,8 +68,8 @@ export const products = mysqlTable("products", {
   slug: varchar("slug", { length: 255 }).notNull().unique(),
   description: text("description"),
   specifications: text("specifications"),
-  image: varchar("image", { length: 512 }),
-  images: text("images"),
+  image: longtext("image"),
+  images: longtext("images"),
   categoryId: bigint("categoryId", { mode: "number", unsigned: true }).notNull(),
   subcategoryId: bigint("subcategoryId", { mode: "number", unsigned: true }),
   carBrand: varchar("carBrand", { length: 64 }).notNull(),
@@ -108,7 +117,7 @@ export const orders = mysqlTable("orders", {
   deliveryMethod: mysqlEnum("deliveryMethod", ["pickup", "local_delivery", "courier"]).default("courier").notNull(),
   paymentMethod: mysqlEnum("paymentMethod", ["easypaisa", "jazzcash", "bank_transfer", "cod"]).notNull(),
   paymentStatus: mysqlEnum("paymentStatus", ["pending", "verified", "rejected"]).default("pending").notNull(),
-  paymentScreenshot: varchar("paymentScreenshot", { length: 512 }),
+  paymentScreenshot: longtext("paymentScreenshot"),
   paymentNotes: text("paymentNotes"),
   subtotal: decimal("subtotal", { precision: 12, scale: 2 }).notNull(),
   deliveryCharge: decimal("deliveryCharge", { precision: 10, scale: 2 }).default("0").notNull(),
@@ -151,7 +160,7 @@ export const orderItems = mysqlTable("order_items", {
 export const websiteSettings = mysqlTable("website_settings", {
   id: serial("id").primaryKey(),
   key: varchar("key", { length: 64 }).notNull().unique(),
-  value: text("value"),
+  value: longtext("value"),
   updatedAt: timestamp("updatedAt")
     .defaultNow()
     .notNull()

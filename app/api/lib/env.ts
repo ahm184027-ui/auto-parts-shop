@@ -16,4 +16,6 @@ export const env = {
   kimiAuthUrl: required("KIMI_AUTH_URL"),
   kimiOpenUrl: required("KIMI_OPEN_URL"),
   ownerUnionId: process.env.OWNER_UNION_ID ?? "",
+  adminUsername: process.env.ADMIN_USERNAME || "admin",
+  adminPassword: process.env.ADMIN_PASSWORD || "admin123",
 };

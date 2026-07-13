@@ -2,21 +2,21 @@ import { useState } from "react";
 import { useNavigate } from "react-router";
 import { motion } from "framer-motion";
 import { Lock, User, ArrowRight, Shield } from "lucide-react";
+import { trpc } from "@/providers/trpc";
 
 export default function AdminLogin() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const navigate = useNavigate();
+  const login = trpc.admin.login.useMutation({
+    onSuccess: () => navigate("/admin/dashboard"),
+    onError: () => setError("Invalid credentials. Try admin / admin123"),
+  });
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    if (username === "admin" && password === "admin123") {
-      localStorage.setItem("adminAuth", "true");
-      navigate("/admin/dashboard");
-    } else {
-      setError("Invalid credentials. Try admin / admin123");
-    }
+    login.mutate({ username, password });
   };
 
   return (
@@ -69,9 +69,10 @@ export default function AdminLogin() {
 
             <button
               type="submit"
-              className="w-full py-3 bg-blue-600 hover:bg-blue-700 rounded-xl text-white font-semibold transition-colors flex items-center justify-center gap-2"
+              disabled={login.isPending}
+              className="w-full py-3 bg-blue-600 hover:bg-blue-700 rounded-xl text-white font-semibold transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
             >
-              Login <ArrowRight className="w-4 h-4" />
+              {login.isPending ? "Logging in..." : "Login"} <ArrowRight className="w-4 h-4" />
             </button>
           </form>
 

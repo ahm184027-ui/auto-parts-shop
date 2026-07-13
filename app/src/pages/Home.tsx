@@ -4,10 +4,11 @@ import { motion } from "framer-motion";
 import {
   Search, ChevronRight, Shield, Camera, Truck, BadgeCheck,
   Wrench, Battery, Disc, Lightbulb, Droplets, Cog, Frame,
-  Star, Phone, MapPin, Clock, ArrowRight
+  Star, Phone, MapPin, Clock, ArrowRight, Bot
 } from "lucide-react";
 import { trpc } from "@/providers/trpc";
 import type { Product, Category } from "@/types";
+import { openAiAssistant } from "@/lib/chatbot-events";
 
 // Fade in animation component
 function FadeIn({ children, delay = 0 }: { children: React.ReactNode; delay?: number }) {
@@ -76,6 +77,13 @@ function ProductCard({ product }: { product: Product }) {
             </span>
           </div>
         )}
+        {product.stockStatus === "out_of_stock" && (
+          <div className="absolute top-3 right-3">
+            <span className="px-2.5 py-1 rounded-full text-[10px] font-semibold bg-red-500/20 text-red-400 border border-red-500/30">
+              Out of Stock
+            </span>
+          </div>
+        )}
       </div>
       <div className="p-4">
         <p className="text-[10px] uppercase tracking-wider text-gray-500 mb-1">{product.carBrand} {product.carModel}</p>
@@ -106,6 +114,11 @@ export default function Home() {
 
   const { data: categoriesData } = trpc.category.list.useQuery();
   const { data: featuredProducts } = trpc.product.getFeatured.useQuery();
+  const { data: settings } = trpc.settings.getAll.useQuery();
+  const shopAddress = settings?.shopAddress || "Main Auto Market, Karachi, Pakistan";
+  const directionsUrl = settings?.googleMapsUrl && settings.googleMapsUrl !== "https://maps.google.com"
+    ? settings.googleMapsUrl
+    : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(shopAddress)}`;
 
   const brands = ["Toyota", "Honda", "Suzuki", "Hyundai", "Kia", "Nissan", "BMW", "Mercedes"];
   const models: Record<string, string[]> = {
@@ -135,7 +148,7 @@ export default function Home() {
         {/* Background */}
         <div className="absolute inset-0">
           <img
-            src="/images/hero/hero-bg.jpg"
+            src={settings?.heroImage || "/images/hero/hero-bg.jpg"}
             alt="Auto Parts Warehouse"
             className="w-full h-full object-cover"
           />
@@ -164,7 +177,7 @@ export default function Home() {
               transition={{ duration: 0.8, delay: 0.2 }}
               className="text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold text-white leading-[1.1] mb-6"
             >
-              Buy Genuine Auto
+              <span className="text-silver-gradient">Buy Genuine Auto</span>
               <br />
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-blue-600">
                 Spare Parts Online
@@ -259,6 +272,12 @@ export default function Home() {
               >
                 Shop Parts <ChevronRight className="w-4 h-4" />
               </Link>
+              <button
+                onClick={openAiAssistant}
+                className="px-8 py-3.5 bg-blue-600 hover:bg-blue-700 rounded-xl text-white font-semibold transition-all flex items-center gap-2"
+              >
+                <Bot className="w-4 h-4" /> Talk to AI Assistant
+              </button>
               <Link
                 to="/contact"
                 className="px-8 py-3.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-white font-medium transition-all flex items-center gap-2"
@@ -401,23 +420,25 @@ export default function Home() {
               <div className="space-y-4 mb-8">
                 <div className="flex items-center gap-3 text-gray-300">
                   <MapPin className="w-5 h-5 text-blue-400" />
-                  <span>Main Auto Market, Karachi, Pakistan</span>
+                  <span>{shopAddress}</span>
                 </div>
-                <div className="flex items-center gap-3 text-gray-300">
+                <a href={`tel:${settings?.shopPhone || ""}`} className="flex items-center gap-3 text-gray-300 hover:text-blue-400 transition-colors w-fit">
                   <Phone className="w-5 h-5 text-blue-400" />
-                  <span>03XX-XXXXXXX</span>
-                </div>
+                  <span>{settings?.shopPhone || "03XX-XXXXXXX"}</span>
+                </a>
                 <div className="flex items-center gap-3 text-gray-300">
                   <Clock className="w-5 h-5 text-blue-400" />
-                  <span>Monday - Saturday: 9:00 AM - 8:00 PM</span>
+                  <span>{settings?.openingHours || "Monday - Saturday: 9:00 AM - 8:00 PM"}</span>
                 </div>
               </div>
-              <Link
-                to="/contact"
+              <a
+                href={directionsUrl}
+                target="_blank"
+                rel="noopener noreferrer"
                 className="inline-flex items-center gap-2 px-8 py-4 bg-orange-500 hover:bg-orange-600 rounded-xl text-white font-semibold transition-all"
               >
                 Get Directions <ArrowRight className="w-4 h-4" />
-              </Link>
+              </a>
             </FadeIn>
           </div>
         </div>

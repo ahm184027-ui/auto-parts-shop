@@ -38,5 +38,19 @@ function requireRole(role: string) {
   });
 }
 
+const requireAdminSession = t.middleware(async (opts) => {
+  const { ctx, next } = opts;
+
+  if (!ctx.isAdmin) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: ErrorMessages.insufficientRole,
+    });
+  }
+
+  return next({ ctx });
+});
+
 export const authedQuery = t.procedure.use(requireAuth);
 export const adminQuery = authedQuery.use(requireRole("admin"));
+export const adminProcedure = t.procedure.use(requireAdminSession);

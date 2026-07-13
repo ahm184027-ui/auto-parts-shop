@@ -1,12 +1,78 @@
 import { z } from "zod";
+import * as cookie from "cookie";
+import { TRPCError } from "@trpc/server";
 import { eq, desc, sql, gte } from "drizzle-orm";
-import { createRouter, publicQuery } from "./middleware";
+import { createRouter, publicQuery, adminProcedure } from "./middleware";
 import { getDb } from "./queries/connection";
-import { products, orders, aiChatLogs, feedback } from "@db/schema";
+import { products, orders, orderItems, aiChatLogs, feedback } from "@db/schema";
+import { ADMIN_SESSION_COOKIE, createAdminSession, revokeAdminSession } from "./lib/admin-session";
+import { getSessionCookieOptions } from "./lib/cookies";
+import { env } from "./lib/env";
+import { checkRateLimit } from "./lib/rate-limit";
+
+const LOGIN_ATTEMPT_LIMIT = 5;
+const LOGIN_ATTEMPT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
 
 export const adminRouter = createRouter({
+  // Admin login (username/password, sets httpOnly session cookie)
+  login: publicQuery
+    .input(z.object({ username: z.string(), password: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      const { allowed, retryAfterMs } = checkRateLimit(
+        `admin-login:${input.username.toLowerCase()}`,
+        LOGIN_ATTEMPT_LIMIT,
+        LOGIN_ATTEMPT_WINDOW_MS,
+      );
+      if (!allowed) {
+        const minutes = Math.ceil(retryAfterMs / 60000);
+        throw new TRPCError({
+          code: "TOO_MANY_REQUESTS",
+          message: `Too many login attempts. Try again in ${minutes} minute(s).`,
+        });
+      }
+
+      if (input.username !== env.adminUsername || input.password !== env.adminPassword) {
+        throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid username or password" });
+      }
+
+      const token = createAdminSession();
+      const opts = getSessionCookieOptions(ctx.req.headers);
+      ctx.resHeaders.append(
+        "set-cookie",
+        cookie.serialize(ADMIN_SESSION_COOKIE, token, {
+          httpOnly: opts.httpOnly,
+          path: opts.path,
+          sameSite: opts.sameSite?.toLowerCase() as "lax" | "none",
+          secure: opts.secure,
+          maxAge: 7 * 24 * 60 * 60,
+        }),
+      );
+      return { success: true };
+    }),
+
+  // Admin logout
+  logout: adminProcedure.mutation(async ({ ctx }) => {
+    const cookies = cookie.parse(ctx.req.headers.get("cookie") || "");
+    revokeAdminSession(cookies[ADMIN_SESSION_COOKIE]);
+    const opts = getSessionCookieOptions(ctx.req.headers);
+    ctx.resHeaders.append(
+      "set-cookie",
+      cookie.serialize(ADMIN_SESSION_COOKIE, "", {
+        httpOnly: opts.httpOnly,
+        path: opts.path,
+        sameSite: opts.sameSite?.toLowerCase() as "lax" | "none",
+        secure: opts.secure,
+        maxAge: 0,
+      }),
+    );
+    return { success: true };
+  }),
+
+  // Verify current admin session
+  me: adminProcedure.query(() => ({ ok: true })),
+
   // Dashboard statistics
-  getDashboardStats: publicQuery.query(async () => {
+  getDashboardStats: adminProcedure.query(async () => {
     const db = getDb();
     
     // Total products
@@ -68,7 +134,7 @@ export const adminRouter = createRouter({
   }),
 
   // Get inventory report
-  getInventory: publicQuery
+  getInventory: adminProcedure
     .input(
       z.object({
         filter: z.enum(["all", "low_stock", "out_of_stock", "featured"]).default("all"),
@@ -115,7 +181,7 @@ export const adminRouter = createRouter({
     }),
 
   // Get AI chat logs
-  getChatLogs: publicQuery
+  getChatLogs: adminProcedure
     .input(
       z.object({
         page: z.number().default(1),
@@ -148,7 +214,7 @@ export const adminRouter = createRouter({
     }),
 
   // Get feedback list
-  getFeedback: publicQuery
+  getFeedback: adminProcedure
     .input(
       z.object({
         page: z.number().default(1),
@@ -181,7 +247,7 @@ export const adminRouter = createRouter({
     }),
 
   // Update product stock (admin)
-  updateStock: publicQuery
+  updateStock: adminProcedure
     .input(
       z.object({
         productId: z.number(),
@@ -202,7 +268,7 @@ export const adminRouter = createRouter({
     }),
 
   // Get profit report
-  getProfitReport: publicQuery.query(async () => {
+  getProfitReport: adminProcedure.query(async () => {
     const db = getDb();
     
     const productProfits = await db
@@ -227,4 +293,53 @@ export const adminRouter = createRouter({
       totalEstimatedProfit: totalProfit,
     };
   }),
+
+  // Get sales report (daily revenue for last N days + top-selling / slow-moving products)
+  getSalesReport: adminProcedure
+    .input(z.object({ days: z.number().default(30) }).optional())
+    .query(async ({ input }) => {
+      const db = getDb();
+      const days = input?.days || 30;
+      const since = new Date();
+      since.setHours(0, 0, 0, 0);
+      since.setDate(since.getDate() - (days - 1));
+
+      const dailySales = await db
+        .select({
+          date: sql<string>`DATE(${orders.createdAt})`,
+          orderCount: sql<number>`COUNT(*)`,
+          revenue: sql<string>`COALESCE(SUM(${orders.grandTotal}), 0)`,
+        })
+        .from(orders)
+        .where(gte(orders.createdAt, since))
+        .groupBy(sql`DATE(${orders.createdAt})`)
+        .orderBy(sql`DATE(${orders.createdAt})`);
+
+      const topSelling = await db
+        .select({
+          productId: orderItems.productId,
+          name: orderItems.productName,
+          sku: orderItems.sku,
+          totalSold: sql<number>`COALESCE(SUM(${orderItems.quantity}), 0)`,
+          totalRevenue: sql<string>`COALESCE(SUM(${orderItems.totalPrice}), 0)`,
+        })
+        .from(orderItems)
+        .groupBy(orderItems.productId, orderItems.productName, orderItems.sku)
+        .orderBy(desc(sql`SUM(${orderItems.quantity})`))
+        .limit(10);
+
+      const slowMoving = await db
+        .select({
+          id: products.id,
+          name: products.name,
+          sku: products.sku,
+          stockQuantity: products.stockQuantity,
+          totalSold: sql<number>`COALESCE((SELECT SUM(quantity) FROM order_items WHERE productId = ${products.id}), 0)`,
+        })
+        .from(products)
+        .orderBy(sql`COALESCE((SELECT SUM(quantity) FROM order_items WHERE productId = ${products.id}), 0) ASC`)
+        .limit(10);
+
+      return { dailySales, topSelling, slowMoving };
+    }),
 });

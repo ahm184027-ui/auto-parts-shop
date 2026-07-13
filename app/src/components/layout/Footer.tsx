@@ -1,7 +1,15 @@
 import { Link } from "react-router";
-import { MapPin, Phone, Mail, Clock, ExternalLink } from "lucide-react";
+import { MapPin, Phone, Mail, Clock, Facebook, Instagram, Youtube } from "lucide-react";
+import { trpc } from "@/providers/trpc";
 
 export default function Footer() {
+  const { data: settings } = trpc.settings.getAll.useQuery();
+  const socialLinks = [
+    { url: settings?.facebookUrl, icon: Facebook, label: "Facebook" },
+    { url: settings?.instagramUrl, icon: Instagram, label: "Instagram" },
+    { url: settings?.youtubeUrl, icon: Youtube, label: "YouTube" },
+  ].filter((s) => s.url);
+
   return (
     <footer className="bg-[#050505] border-t border-white/5">
       {/* Main footer */}
@@ -10,20 +18,35 @@ export default function Footer() {
           {/* Brand */}
           <div className="space-y-4">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-700 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-sm">A</span>
-              </div>
-              <span className="font-bold text-lg text-white">Auto Parts Shop</span>
+              {settings?.logo ? (
+                <img src={settings.logo} alt={settings?.shopName || "Logo"} className="w-8 h-8 rounded-lg object-cover" />
+              ) : (
+                <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-700 rounded-lg flex items-center justify-center">
+                  <span className="text-white font-bold text-sm">A</span>
+                </div>
+              )}
+              <span className="font-bold text-lg text-silver-gradient">{settings?.shopName || "Auto Parts Shop"}</span>
             </div>
             <p className="text-sm text-gray-400 leading-relaxed">
-              Your trusted source for genuine auto spare parts in Pakistan. 
+              Your trusted source for genuine auto spare parts in Pakistan.
               Quality products, competitive prices, and fast delivery.
             </p>
-            <div className="flex items-center gap-3">
-              <a href="#" className="w-9 h-9 rounded-lg bg-white/5 flex items-center justify-center hover:bg-blue-600/20 hover:text-blue-400 transition-all">
-                <ExternalLink className="w-4 h-4" />
-              </a>
-            </div>
+            {socialLinks.length > 0 && (
+              <div className="flex items-center gap-3">
+                {socialLinks.map((s) => (
+                  <a
+                    key={s.label}
+                    href={s.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={s.label}
+                    className="w-9 h-9 rounded-lg bg-white/5 flex items-center justify-center hover:bg-blue-600/20 hover:text-blue-400 transition-all"
+                  >
+                    <s.icon className="w-4 h-4" />
+                  </a>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Quick Links */}
@@ -72,19 +95,19 @@ export default function Footer() {
             <ul className="space-y-3">
               <li className="flex items-start gap-3">
                 <MapPin className="w-4 h-4 text-blue-400 mt-0.5 shrink-0" />
-                <span className="text-sm text-gray-400">Main Auto Market, Karachi, Pakistan</span>
+                <span className="text-sm text-gray-400">{settings?.shopAddress || "Main Auto Market, Karachi, Pakistan"}</span>
               </li>
               <li className="flex items-center gap-3">
                 <Phone className="w-4 h-4 text-blue-400 shrink-0" />
-                <span className="text-sm text-gray-400">03XX-XXXXXXX</span>
+                <a href={`tel:${settings?.shopPhone || ""}`} className="text-sm text-gray-400 hover:text-blue-400 transition-colors">{settings?.shopPhone || "03XX-XXXXXXX"}</a>
               </li>
               <li className="flex items-center gap-3">
                 <Mail className="w-4 h-4 text-blue-400 shrink-0" />
-                <span className="text-sm text-gray-400">info@autopartsshop.pk</span>
+                <a href={`mailto:${settings?.shopEmail || ""}`} className="text-sm text-gray-400 hover:text-blue-400 transition-colors">{settings?.shopEmail || "info@autopartsshop.pk"}</a>
               </li>
               <li className="flex items-center gap-3">
                 <Clock className="w-4 h-4 text-blue-400 shrink-0" />
-                <span className="text-sm text-gray-400">Mon-Sat: 9AM - 8PM</span>
+                <span className="text-sm text-gray-400">{settings?.openingHours || "Mon-Sat: 9AM - 8PM"}</span>
               </li>
             </ul>
           </div>
@@ -95,12 +118,12 @@ export default function Footer() {
       <div className="border-t border-white/5">
         <div className="max-w-7xl mx-auto px-4 py-4 flex flex-col md:flex-row items-center justify-between gap-2">
           <p className="text-xs text-gray-500">
-            &copy; {new Date().getFullYear()} Auto Parts Shop. All rights reserved.
+            &copy; {new Date().getFullYear()} {settings?.shopName || "Auto Parts Shop"}. All rights reserved.
           </p>
           <div className="flex items-center gap-4 text-xs text-gray-500">
-            <span>Privacy Policy</span>
-            <span>Terms of Service</span>
-            <span>Return Policy</span>
+            <Link to="/privacy-policy" className="hover:text-blue-400 transition-colors">Privacy Policy</Link>
+            <Link to="/terms" className="hover:text-blue-400 transition-colors">Terms of Service</Link>
+            <Link to="/return-policy" className="hover:text-blue-400 transition-colors">Return Policy</Link>
           </div>
         </div>
       </div>

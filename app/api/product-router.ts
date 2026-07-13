@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { eq, and, like, gte, lte, inArray, desc, asc, sql } from "drizzle-orm";
-import { createRouter, publicQuery } from "./middleware";
+import { createRouter, publicQuery, adminProcedure } from "./middleware";
 import { getDb } from "./queries/connection";
 import { products, categories, subcategories } from "@db/schema";
 
@@ -55,10 +55,17 @@ export const productRouter = createRouter({
         conditions.push(eq(products.condition, filters.condition as "new" | "used"));
       }
       if (filters.search) {
-        const searchTerm = `%${filters.search}%`;
-        conditions.push(
-          sql`${products.name} LIKE ${searchTerm} OR ${products.sku} LIKE ${searchTerm} OR ${products.carBrand} LIKE ${searchTerm} OR ${products.carModel} LIKE ${searchTerm}`
-        );
+        // Match each word independently (AND across words, OR across fields) so
+        // multi-word queries like "Toyota Corolla brake pads" still match a name
+        // like "Toyota Corolla Front Brake Pads" even though the words aren't
+        // contiguous in that exact order.
+        const words = filters.search.trim().split(/\s+/).filter(Boolean);
+        for (const word of words) {
+          const term = `%${word}%`;
+          conditions.push(
+            sql`(${products.name} LIKE ${term} OR ${products.sku} LIKE ${term} OR ${products.carBrand} LIKE ${term} OR ${products.carModel} LIKE ${term} OR ${products.description} LIKE ${term})`
+          );
+        }
       }
       if (filters.featured) {
         conditions.push(eq(products.featured, true));
@@ -167,13 +174,15 @@ export const productRouter = createRouter({
     .input(z.object({ query: z.string().min(1) }))
     .query(async ({ input }) => {
       const db = getDb();
-      const searchTerm = `%${input.query}%`;
+      const words = input.query.trim().split(/\s+/).filter(Boolean);
+      const wordConditions = words.map((word) => {
+        const term = `%${word}%`;
+        return sql`(${products.name} LIKE ${term} OR ${products.carBrand} LIKE ${term} OR ${products.carModel} LIKE ${term} OR ${products.sku} LIKE ${term} OR ${products.description} LIKE ${term})`;
+      });
       return db
         .select()
         .from(products)
-        .where(
-          sql`${products.name} LIKE ${searchTerm} OR ${products.carBrand} LIKE ${searchTerm} OR ${products.carModel} LIKE ${searchTerm} OR ${products.sku} LIKE ${searchTerm}`
-        )
+        .where(and(...wordConditions))
         .limit(20);
     }),
 
@@ -201,7 +210,7 @@ export const productRouter = createRouter({
     }),
 
   // Create product (admin)
-  create: publicQuery
+  create: adminProcedure
     .input(
       z.object({
         sku: z.string(),
@@ -246,7 +255,7 @@ export const productRouter = createRouter({
     }),
 
   // Update product (admin)
-  update: publicQuery
+  update: adminProcedure
     .input(
       z.object({
         id: z.number(),
@@ -292,7 +301,7 @@ export const productRouter = createRouter({
     }),
 
   // Delete product (admin)
-  delete: publicQuery
+  delete: adminProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input }) => {
       const db = getDb();

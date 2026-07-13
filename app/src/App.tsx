@@ -1,6 +1,7 @@
 import { Routes, Route } from "react-router";
 import { CartProvider } from "@/contexts/CartContext";
 import { TRPCProvider } from "@/providers/trpc";
+import { Toaster } from "@/components/ui/sonner";
 
 // Layout
 import Header from "@/components/layout/Header";
@@ -17,12 +18,14 @@ import OrderTracking from "@/pages/OrderTracking";
 import Contact from "@/pages/Contact";
 import AdminLogin from "@/pages/AdminLogin";
 import AdminDashboard from "@/pages/AdminDashboard";
+import PolicyPage from "@/pages/PolicyPage";
 
 function App() {
   return (
     <TRPCProvider>
       <CartProvider>
         <div className="min-h-screen bg-[#0a0a0a] text-white">
+          <Toaster position="top-center" richColors />
           <Routes>
             {/* Admin routes */}
             <Route path="/admin/login" element={<AdminLogin />} />
@@ -42,6 +45,9 @@ function App() {
                     <Route path="/checkout" element={<Checkout />} />
                     <Route path="/track-order" element={<OrderTracking />} />
                     <Route path="/contact" element={<Contact />} />
+                    <Route path="/return-policy" element={<PolicyPage settingKey="returnPolicy" />} />
+                    <Route path="/privacy-policy" element={<PolicyPage settingKey="privacyPolicy" />} />
+                    <Route path="/terms" element={<PolicyPage settingKey="termsAndConditions" />} />
                   </Routes>
                 </main>
                 <Footer />

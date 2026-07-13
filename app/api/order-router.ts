@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { eq, and, desc, sql, gte, lte } from "drizzle-orm";
-import { createRouter, publicQuery } from "./middleware";
+import { TRPCError } from "@trpc/server";
+import { createRouter, publicQuery, adminProcedure } from "./middleware";
 import { getDb } from "./queries/connection";
 import { orders, orderItems, products } from "@db/schema";
 
@@ -33,14 +34,35 @@ export const orderRouter = createRouter({
         serviceFee: z.number().default(0),
         grandTotal: z.number(),
         notes: z.string().optional(),
+        paymentScreenshot: z.string().optional(),
       })
     )
     .mutation(async ({ input }) => {
       const db = getDb();
-      
+
+      // Verify stock availability for every line item before committing the
+      // order — prevents overselling from stale carts or race conditions.
+      for (const item of input.items) {
+        const [product] = await db
+          .select({ stockQuantity: products.stockQuantity, name: products.name })
+          .from(products)
+          .where(eq(products.id, item.productId))
+          .limit(1);
+
+        if (!product) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: `"${item.name}" is no longer available.` });
+        }
+        if (product.stockQuantity < item.quantity) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: `Only ${product.stockQuantity} unit(s) of "${product.name}" left in stock. Please update the quantity in your cart.`,
+          });
+        }
+      }
+
       // Generate order number
       const orderNumber = `APS${Date.now().toString(36).toUpperCase()}`;
-      
+
       // Create order
       const result = await db.insert(orders).values({
         orderNumber,
@@ -52,15 +74,16 @@ export const orderRouter = createRouter({
         city: input.city,
         deliveryMethod: input.deliveryMethod,
         paymentMethod: input.paymentMethod,
+        paymentScreenshot: input.paymentScreenshot || null,
         subtotal: String(input.subtotal),
         deliveryCharge: String(input.deliveryCharge),
         serviceFee: String(input.serviceFee),
         grandTotal: String(input.grandTotal),
         notes: input.notes || null,
       });
-      
+
       const orderId = Number(result[0].insertId);
-      
+
       // Create order items
       for (const item of input.items) {
         await db.insert(orderItems).values({
@@ -73,16 +96,29 @@ export const orderRouter = createRouter({
           unitPrice: String(item.unitPrice),
           totalPrice: String(item.totalPrice),
         });
-        
-        // Update stock
+
+        // Update stock and recompute stock status
         await db
           .update(products)
           .set({
             stockQuantity: sql`stockQuantity - ${item.quantity}`,
           })
           .where(eq(products.id, item.productId));
+
+        const updated = await db
+          .select({ stockQuantity: products.stockQuantity, minStockAlert: products.minStockAlert })
+          .from(products)
+          .where(eq(products.id, item.productId))
+          .limit(1);
+
+        if (updated[0]) {
+          const qty = updated[0].stockQuantity;
+          const stockStatus: "in_stock" | "low_stock" | "out_of_stock" =
+            qty <= 0 ? "out_of_stock" : qty <= updated[0].minStockAlert ? "low_stock" : "in_stock";
+          await db.update(products).set({ stockStatus }).where(eq(products.id, item.productId));
+        }
       }
-      
+
       return { orderId, orderNumber, success: true };
     }),
 
@@ -118,7 +154,7 @@ export const orderRouter = createRouter({
     }),
 
   // Get all orders (admin)
-  list: publicQuery
+  list: adminProcedure
     .input(
       z.object({
         status: z.string().optional(),
@@ -160,7 +196,7 @@ export const orderRouter = createRouter({
     }),
 
   // Get single order with items (admin)
-  getById: publicQuery
+  getById: adminProcedure
     .input(z.object({ id: z.number() }))
     .query(async ({ input }) => {
       const db = getDb();
@@ -181,7 +217,7 @@ export const orderRouter = createRouter({
     }),
 
   // Update order status (admin)
-  updateStatus: publicQuery
+  updateStatus: adminProcedure
     .input(
       z.object({
         id: z.number(),
@@ -207,8 +243,24 @@ export const orderRouter = createRouter({
       return { success: true };
     }),
 
+  // Update payment verification status only (admin)
+  updatePayment: adminProcedure
+    .input(
+      z.object({
+        id: z.number(),
+        paymentStatus: z.enum(["pending", "verified", "rejected"]),
+        paymentNotes: z.string().optional(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const db = getDb();
+      const { id, ...data } = input;
+      await db.update(orders).set(data).where(eq(orders.id, id));
+      return { success: true };
+    }),
+
   // Get order statistics (admin)
-  getStats: publicQuery.query(async () => {
+  getStats: adminProcedure.query(async () => {
     const db = getDb();
     
     const totalOrders = await db.select({ count: sql<number>`COUNT(*)` }).from(orders);

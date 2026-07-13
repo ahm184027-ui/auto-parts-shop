@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { eq, asc } from "drizzle-orm";
-import { createRouter, publicQuery } from "./middleware";
+import { createRouter, publicQuery, adminProcedure } from "./middleware";
 import { getDb } from "./queries/connection";
 import { categories, subcategories, products } from "@db/schema";
 
@@ -20,10 +20,10 @@ export const categoryRouter = createRouter({
         .orderBy(asc(subcategories.sortOrder));
       
       const productCount = await db
-        .select({ count: { value: subcategories.id } })
+        .select({ id: products.id })
         .from(products)
         .where(eq(products.categoryId, cat.id));
-      
+
       result.push({
         ...cat,
         subcategories: subs,
@@ -70,7 +70,7 @@ export const categoryRouter = createRouter({
     }),
 
   // Create category (admin)
-  create: publicQuery
+  create: adminProcedure
     .input(
       z.object({
         slug: z.string(),
@@ -86,8 +86,26 @@ export const categoryRouter = createRouter({
       return { id: Number(result[0].insertId), success: true };
     }),
 
+  // Update category (admin)
+  update: adminProcedure
+    .input(
+      z.object({
+        id: z.number(),
+        name: z.string().optional(),
+        description: z.string().optional(),
+        image: z.string().optional(),
+        sortOrder: z.number().optional(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const db = getDb();
+      const { id, ...data } = input;
+      await db.update(categories).set(data).where(eq(categories.id, id));
+      return { success: true };
+    }),
+
   // Create subcategory (admin)
-  createSub: publicQuery
+  createSub: adminProcedure
     .input(
       z.object({
         categoryId: z.number(),
